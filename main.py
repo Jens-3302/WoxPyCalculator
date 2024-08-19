@@ -30,7 +30,7 @@ xFilePath = os.environ['TMP'] + os.sep + "wox_pycalc_x.txt"
 if os.path.exists(xFilePath):
     try:
         with open(xFilePath, "r") as xFile:
-            x = int(xFile.read())
+            x = float(xFile.read())
     except:
         pass
 
