@@ -31,7 +31,7 @@ sqr = lambda x: x ** 2
 x = 0
 
 varFilePath = os.environ['TMP'] + os.sep + "wox_pycalc_vars.json"
-variables = []
+variables = ["pi", "e"]
 
 if os.path.exists(varFilePath):
     try:
@@ -78,7 +78,7 @@ def handle_trim_specials(query):
   
 def handle_factorials(query):
     # Replace simple factorial
-    query = re.sub(r'(\b\d+\.?\d*([eE][-+]?\d+)?\b)!',
+    query = re.sub(r'(\b\d+\.?\d*\b)!',
                    lambda match: f'factorial({match.group(1)})', query)
 
     i = 2
@@ -102,7 +102,8 @@ def handle_pow_xor(query):
     return query.replace("^", "**").replace("²", "**2").replace("³", "**3").replace("xor", "^")
 
 def handle_implied_multiplication(query):
-    return re.sub(r'((?:\.\d+|\b\d+\.\d*|\b\d+)(?:[eE][-+]?\d+)?)\s*(x|pi)\b',
+    joinedVariables = "|".join(list(map(re.escape, variables)))
+    return re.sub(r'(\.\d+|\b\d+\.\d*|\b\d+)\s*(' + joinedVariables. + r')\b',
                   r'(\1*\2)', query)
 
 def handle_missing_parentheses(query):
