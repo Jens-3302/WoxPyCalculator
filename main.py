@@ -21,7 +21,11 @@ except:
     pass
 
 from builtins import *  # Required for division scipy, also allows for pow to be used with modulus
-    
+
+###########################
+# Environment preparation #
+###########################
+  
 sqr = lambda x: x ** 2
 
 x = 0
@@ -34,6 +38,54 @@ if os.path.exists(xFilePath):
     except:
         pass
 
+  
+############################
+# Pre-calculation handlers #
+############################
+
+def handle_trim_specials(query):
+    return re.sub(r'(^[*/=])|([+\-*/=(]$)', '', query) # Removes leading and trailing special chars
+  
+def handle_factorials(query):
+    # Replace simple factorial
+    query = re.sub(r'(\b\d+\.?\d*([eE][-+]?\d+)?\b)!',
+                   lambda match: f'factorial({match.group(1)})', query)
+
+    i = 2
+    while i < len(query):
+        if query[i] == "!" and query[i-1] == ")":
+            j = i-1
+            bracket_count = 1
+            while bracket_count != 0 and j > 0:
+                j -= 1
+                if query[j] == ")":
+                    bracket_count += 1
+                elif query[j] == "(":
+                    bracket_count -= 1
+            query = query[:j] + f'factorial({query[j+1:i-1]})' +\
+                    (query[i+1:] if i+1 < len(query) else "")
+            i += 8  # 8 is the difference between factorial(...) and (...)!
+        i += 1
+    return query
+
+def handle_pow_xor(query):
+    return query.replace("^", "**").replace("xor", "^")
+
+def handle_implied_multiplication(query):
+    return re.sub(r'((?:\.\d+|\b\d+\.\d*|\b\d+)(?:[eE][-+]?\d+)?)\s*(x|pi)\b',
+                  r'(\1*\2)', query)
+
+def handle_missing_parentheses(query):
+    parDiff = query.count('(') - query.count(')')
+    if parDiff > 0:
+        return query + ')'*parDiff
+    if parDiff < 0:
+        return '('*(-parDiff) + query
+    return query
+
+####################
+# Post Calculation #
+####################
 
 def json_wox(title, subtitle, icon, action=None, action_params=None, action_keep=None):
     json = {
@@ -90,45 +142,21 @@ def format_result(result):
                 return format_result(np.asscalar(result))
     else:
         return str(result)
-
-  
-def handle_factorials(query):
-    # Replace simple factorial
-    query = re.sub(r'(\b\d+\.?\d*([eE][-+]?\d+)?\b)!',
-                   lambda match: f'factorial({match.group(1)})', query)
-
-    i = 2
-    while i < len(query):
-        if query[i] == "!" and query[i-1] == ")":
-            j = i-1
-            bracket_count = 1
-            while bracket_count != 0 and j > 0:
-                j -= 1
-                if query[j] == ")":
-                    bracket_count += 1
-                elif query[j] == "(":
-                    bracket_count -= 1
-            query = query[:j] + f'factorial({query[j+1:i-1]})' +\
-                    (query[i+1:] if i+1 < len(query) else "")
-            i += 8  # 8 is the difference between factorial(...) and (...)!
-        i += 1
-    return query
-
-def handle_pow_xor(query):
-    return query.replace("^", "**").replace("xor", "^")
-
-def handle_implied_multiplication(query):
-    return re.sub(r'((?:\.\d+|\b\d+\.\d*|\b\d+)(?:[eE][-+]?\d+)?)\s*(x|pi)\b',
-                  r'(\1*\2)', query)
-
+      
     
+#################
+# Main Function #
+#################
+
 def calculate(query):
     results = []
     # filter any special characters at start or end
-    query = re.sub(r'(^[*/=])|([+\-*/=(]$)', '', query)
+    query = handle_trim_specials(query)
     query = handle_factorials(query)
     query = handle_pow_xor(query)
     query = handle_implied_multiplication(query)
+    query = handle_missing_parentheses(query)
+    
     try:
         result = eval(query)
         formatted = format_result(result)
@@ -138,15 +166,6 @@ def calculate(query):
                                 'change_query',
                                 [str(result)],
                                 True))
-    except SyntaxError:
-        # try to close parentheses
-        opening_par = query.count('(')
-        closing_par = query.count(')')
-        if opening_par > closing_par:
-            return calculate(query + ')'*(opening_par-closing_par))
-        else:
-            # let Wox keep previous result
-            raise SyntaxError
     except NameError:
         # try to find docstrings for methods similar to query
         glob = set(filter(lambda x: 'Error' not in x and 'Warning' not in x and '_' not in x, globals()))
