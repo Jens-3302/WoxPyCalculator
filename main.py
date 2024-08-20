@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
 from math import *
-import re
-import os
-import json
+import re as _re
+import os as _os
+import json as _json
 
 try:
     import pyperclip
@@ -30,15 +30,15 @@ from builtins import *  # Required for division scipy, also allows for pow to be
 sqr = lambda x: x ** 2
 x = 0
 
-varFilePath = os.environ['TMP'] + os.sep + "wox_pycalc_vars.json"
+varFilePath = _os.environ['TMP'] + _os.sep + "wox_pycalc_vars.json"
 variables = ["pi", "e"]
 
-if os.path.exists(varFilePath):
+if _os.path.exists(varFilePath):
     try:
         with open(varFilePath, "r") as varFile:
-            data = json.load(varFile)
+            data = _json.load(varFile)
             for key in data:
-                exec(key + " = " + str(data[key]))
+                exec(f"{key} = {repr(data[key])}")
                 variables.append(key)
     except:
         pass
@@ -48,11 +48,11 @@ def delete(variable):
         return "Surround with '"
     try:
         with open(varFilePath, "r") as varFile:
-            data = json.load(varFile)
+            data = _json.load(varFile)
             exists = data.get(variable) is not None
             del data[variable]
             with open(varFilePath, "w") as varFile:
-                json.dump(data, varFile)
+                _json.dump(data, varFile)
                 if exists:
                     return "Deleted"
                 else:
@@ -64,21 +64,23 @@ def delete(variable):
 def deleteVariables():
     try:
         with open(varFilePath, "w") as varFile:
-            json.dump({}, varFile)
+            _json.dump({}, varFile)
             return "done"
     except:
         pass
+        
+delVars = deleteVariables
 
 ############################
 # Pre-calculation handlers #
 ############################
 
 def handle_trim_specials(query):
-    return re.sub(r'(^[*/=])|([+\-*/=(]$)', '', query) # Removes leading and trailing special chars
+    return _re.sub(r'(^[*/=])|([+\-*/=(]$)', '', query) # Removes leading and trailing special chars
   
 def handle_factorials(query):
     # Replace simple factorial
-    query = re.sub(r'(\b\d+\.?\d*\b)!',
+    query = _re.sub(r'(\b\d+\.?\d*\b)!',
                    lambda match: f'factorial({match.group(1)})', query)
 
     i = 2
@@ -102,8 +104,8 @@ def handle_pow_xor(query):
     return query.replace("^", "**").replace("²", "**2").replace("³", "**3").replace("xor", "^")
 
 def handle_implied_multiplication(query):
-    joinedVariables = "|".join(list(map(re.escape, variables)))
-    return re.sub(r'(\.\d+|\b\d+\.\d*|\b\d+)\s*(' + joinedVariables. + r')\b',
+    joinedVariables = "|".join(list(map(_re.escape, variables)))
+    return _re.sub(r'(\.\d+|\b\d+\.\d*|\b\d+)\s*(' + joinedVariables + r')\b',
                   r'(\1*\2)', query)
 
 def handle_missing_parentheses(query):
@@ -114,23 +116,23 @@ def handle_missing_parentheses(query):
         return '('*(-parDiff) + query
     return query
     
-variableName = 'x'
+_variableName = 'x'
 
 def handle_assign(query):
-    global variableName
+    global _variableName
     if query.count('=') != 1:
         return query
     equ = query.split('=', 1)
-    if bool(re.match(r'^[^\W0-9]\w*\s*[\+\-\*\/]?$', equ[0])):
+    if bool(_re.match(r'^[^\W0-9_]\w*\s*[\+\-\*\/]?$', equ[0])):
         if equ[0][-1] in '+-*/':
             equ[1] = equ[0]+equ[1]
             equ[0] = equ[0][:-1]
-        variableName = equ[0].strip()
+        _variableName = equ[0].strip()
         return equ[1]
-    if bool(re.match(r'^\s*[^\W0-9]\w*$', equ[1])):
+    if bool(_re.match(r'^\s*[^\W0-9_]\w*$', equ[1])):
         if equ[0][-1] in '+-*/':
             equ[0] = equ[0]+equ[1]
-        variableName = equ[1].strip()
+        _variableName = equ[1].strip()
         return equ[0]
         
         
@@ -140,20 +142,20 @@ def handle_assign(query):
 ####################
 
 def json_wox(title, subtitle, icon, action=None, action_params=None, action_keep=None):
-    json = {
+    jsonObject = {
         'Title': title,
         'SubTitle': subtitle,
         'IcoPath': icon
     }
     if action and action_params and action_keep:
-        json.update({
+        jsonObject.update({
             'JsonRPCAction': {
                 'method': action,
                 'parameters': action_params,
                 'dontHideAfterAction': action_keep
             }
         })
-    return json
+    return jsonObject
 
 def copy_to_clipboard(text):
     if pyperclip is not None:
@@ -161,21 +163,23 @@ def copy_to_clipboard(text):
     else:
         # Workaround
         cmd = 'echo ' + text.strip() + '| clip'
-        os.system(cmd)
+        _os.system(cmd)
 
 def write_to_vars(result, variableName):
+    if variableName in ['pi', 'e']:
+        return # Maybe we should not allow the user to redefine pi
     try:
-        if os.path.exists(varFilePath):
+        if _os.path.exists(varFilePath):
             with open(varFilePath, "r") as varFile:
-                data = json.load(varFile)
-                data[variableName] = float(result)
+                data = _json.load(varFile)
+                data[variableName] = result
                 with open(varFilePath, "w") as varFile:
-                    json.dump(data, varFile)
+                    _json.dump(data, varFile)
         else:
             data = {}
-            data[variableName] = float(result)
+            data[variableName] = result
             with open(varFilePath, "w") as varFile:
-                json.dump(data, varFile)
+                _json.dump(data, varFile)
     except:
         pass
 
@@ -209,8 +213,7 @@ def format_result(result):
 #################
 
 def calculate(query):
-    results = []
-    base_query = query
+    _results = []
     query = handle_trim_specials(query)
     query = handle_assign(query)
     query = handle_factorials(query)
@@ -219,13 +222,13 @@ def calculate(query):
     query = handle_missing_parentheses(query)
     
     try:
-        result = eval(query)
-        formatted = format_result(result)
-        results.append(json_wox(formatted,
-                                '{} = {}'.format(query, result),
+        _result = eval(query)
+        formatted = format_result(_result)
+        _results.append(json_wox(formatted,
+                                '{} = {}'.format(query, _result),
                                 'icons/app.png',
                                 'change_query',
-                                [str(result), base_query, variableName],
+                                [_result, _variableName],
                                 True))
     except NameError:
         # try to find docstrings for methods similar to query
@@ -234,7 +237,7 @@ def calculate(query):
         for method in help:
             method_eval = eval(method)
             method_help = method_eval.__doc__.split('\n')[0] if method_eval.__doc__ else ''
-            results.append(json_wox(method,
+            _results.append(json_wox(method,
                                     method_help,
                                     'icons/app.png',
                                     'change_query_method',
@@ -243,7 +246,7 @@ def calculate(query):
         if not help:
             # let Wox keep previous result
             raise NameError
-    return results
+    return _results
 
 from wox import Wox, WoxAPI
 
@@ -252,11 +255,10 @@ class Calculator(Wox):
     def query(self, query):
         return calculate(query)
 
-    def change_query(self, query, base_query, variableName):
-        # change query and copy to clipboard after pressing enter
-        WoxAPI.change_query(query)
-        write_to_vars(query, variableName)
-        copy_to_clipboard(query)
+    def change_query(self, result, variableName):
+        WoxAPI.change_query(str(result))
+        write_to_vars(result, variableName)
+        copy_to_clipboard(str(result))
 
     def change_query_method(self, query):
         WoxAPI.change_query(query + '(')
