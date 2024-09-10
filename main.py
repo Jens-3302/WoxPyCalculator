@@ -13,7 +13,7 @@ except:
 try:
     import numpy as np
 except:
-    pass
+    np = None
 
 try:
     from scipy.special import *
@@ -30,6 +30,12 @@ from builtins import *  # Required for division scipy, also allows for pow to be
 sqr = lambda x: x ** 2
 x = 0
 
+if np is not None:
+    def arr(*args):
+        if len(args) == 1 and (isinstance(args[0], list) or isinstance(args[0], np.ndarray)):
+            return np.array(args[0])
+        return np.array(args)
+
 varFilePath = _os.environ['TMP'] + _os.sep + "wox_pycalc_vars.json"
 variables = ["pi", "e"]
 
@@ -42,6 +48,7 @@ if _os.path.exists(varFilePath):
                 variables.append(key)
     except:
         pass
+
 
 def delete(variable):
     if not isinstance(variable, str):
@@ -61,6 +68,7 @@ def delete(variable):
         pass
     return "Didnt work"
 
+
 def deleteVariables():
     try:
         with open(varFilePath, "w") as varFile:
@@ -77,7 +85,8 @@ delVars = deleteVariables
 
 def handle_trim_specials(query):
     return _re.sub(r'(^[*/=])|([+\-*/=(]$)', '', query) # Removes leading and trailing special chars
-  
+
+ 
 def handle_factorials(query):
     # Replace simple factorial
     query = _re.sub(r'(\b\d+\.?\d*\b)!',
@@ -100,22 +109,29 @@ def handle_factorials(query):
         i += 1
     return query
 
+
 def handle_pow_xor(query):
     return query.replace("^", "**").replace("²", "**2").replace("³", "**3").replace("xor", "^")
+
 
 def handle_implied_multiplication(query):
     joinedVariables = "|".join(list(map(_re.escape, variables)))
     return _re.sub(r'(\.\d+|\b\d+\.\d*|\b\d+)\s*(' + joinedVariables + r')\b',
                   r'(\1*\2)', query)
 
+
 def handle_missing_parentheses(query):
     parDiff = query.count('(') - query.count(')')
+    brackDiff = query.count('[') - query.count(']')
+    if brackDiff > 0:
+        query+= ']'*brackDiff
     if parDiff > 0:
         return query + ')'*parDiff
     if parDiff < 0:
         return '('*(-parDiff) + query
     return query
-    
+
+
 _variableName = 'x'
 
 def handle_assign(query):
@@ -141,6 +157,49 @@ def handle_assign(query):
 # Post Calculation #
 ####################
 
+def cast_result(result):
+    if isinstance(result, str) or isinstance(result, int) or isinstance(result, float):
+        return result
+        
+    if np is not None:
+        if isinstance(result, np.number):
+            return result.item()
+        if isinstance(result, np.ndarray):
+            result = result.tolist()
+           
+    try: # Turn all Iterables (other than str) into list
+        resList = []
+        for res in result:
+            resList.append(cast_result(res))
+        return resList
+    except:
+        return result
+ 
+    
+def format_result(result):
+    if hasattr(result, '__call__'):
+        # show docstring for other similar methods
+        raise NameError
+        
+    if isinstance(result, str):
+        return result
+    
+    if isinstance(result, int) or isinstance(result, float):
+        return add_1000_seperators(result)
+    
+    if isinstance(result, list):
+        return '[' + ', '.join(list(map(format_result, result))) + ']'
+        
+    return str(result)
+  
+  
+def add_1000_seperators(result):
+    if int(result) == float(result):
+        return '{:,}'.format(int(result)).replace(',', ' ')
+    else:
+        return '{:,}'.format(round(float(result), 5)).replace(',', ' ')
+
+
 def json_wox(title, subtitle, icon, action=None, action_params=None, action_keep=None):
     jsonObject = {
         'Title': title,
@@ -157,6 +216,7 @@ def json_wox(title, subtitle, icon, action=None, action_params=None, action_keep
         })
     return jsonObject
 
+
 def copy_to_clipboard(text):
     if pyperclip is not None:
         pyperclip.copy(text)
@@ -164,6 +224,7 @@ def copy_to_clipboard(text):
         # Workaround
         cmd = 'echo ' + text.strip() + '| clip'
         _os.system(cmd)
+
 
 def write_to_vars(result, variableName):
     if variableName in ['pi', 'e']:
@@ -182,38 +243,15 @@ def write_to_vars(result, variableName):
                 _json.dump(data, varFile)
     except:
         pass
-
-def format_result(result):
-    if hasattr(result, '__call__'):
-        # show docstring for other similar methods
-        raise NameError
-    if isinstance(result, str):
-        return result
-    if isinstance(result, int) or isinstance(result, float):
-        if int(result) == float(result):
-            return '{:,}'.format(int(result)).replace(',', ' ')
-        else:
-            return '{:,}'.format(round(float(result), 5)).replace(',', ' ')
-    elif hasattr(result, '__iter__'):
-        try:
-            return '[' + ', '.join(list(map(format_result, list(result)))) + ']'
-        except TypeError:
-            # check if ndarray
-            result = result.flatten()
-            if len(result) > 1:
-                return '[' + ', '.join(list(map(format_result, result.flatten()))) + ']'
-            else:
-                return format_result(np.asscalar(result))
-    else:
-        return str(result)
-      
-    
+  
 #################
 # Main Function #
 #################
 
 def calculate(query):
     _results = []
+    raw_query = query
+    
     query = handle_trim_specials(query)
     query = handle_assign(query)
     query = handle_factorials(query)
@@ -222,7 +260,8 @@ def calculate(query):
     query = handle_missing_parentheses(query)
     
     try:
-        _result = eval(query)
+        _result = eval(query)           # Underscore to avoid accidental override of user constants
+        _result = cast_result(_result)
         formatted = format_result(_result)
         _results.append(json_wox(formatted,
                                 '{} = {}'.format(query, _result),
