@@ -150,8 +150,37 @@ def handle_assign(query):
             equ[0] = equ[0]+equ[1]
         _variableName = equ[1].strip()
         return equ[0]
-        
-        
+    return query
+
+def handle_log_n(query):
+    log_pattern = r'log_(\d+)\('
+
+    match = _re.search(log_pattern, query)
+    while match:
+        base = match.group(1)
+        start_expr = match.end()  # Position after 'log_base('
+
+        # Find the matching closing parenthesis for the expression
+        bracket_count = 1
+        i = start_expr
+        while i < len(query) and bracket_count != 0:
+            if query[i] == '(':
+                bracket_count += 1
+            elif query[i] == ')':
+                bracket_count -= 1
+            i += 1
+
+        # Now 'i' is the position right after the matching closing ')'
+        expr = query[start_expr:i-1]
+
+        # Replace 'log_base(expr)' with 'log(expr, base)'
+        query = query[:match.start()] + f'log({expr}, {base})' + query[i:]
+
+        # Continue searching for the next occurrence
+        match = _re.search(log_pattern, query)
+
+    return query
+    
 
 ####################
 # Post Calculation #
@@ -258,6 +287,7 @@ def calculate(query):
     query = handle_pow_xor(query)
     query = handle_implied_multiplication(query)
     query = handle_missing_parentheses(query)
+    query = handle_log_n(query)
     
     try:
         _result = eval(query)           # Underscore to avoid accidental override of user constants
